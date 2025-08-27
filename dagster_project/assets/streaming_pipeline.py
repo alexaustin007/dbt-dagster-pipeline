@@ -11,20 +11,95 @@ from pathlib import Path
 import os
 import signal
 import psutil
+import datetime
+from typing import Dict, Any
 
 # dbt project path
 DBT_PROJECT_PATH = Path("/Users/alexaustinchettiar/Downloads/retail_data_pipeline_full/dbt_project")
 
-# Simple asset to run dbt streaming models without creating duplicate assets
+def should_full_refresh(context) -> bool:
+    """
+    Determine if full refresh is needed based on business rules
+    """
+    current_time = datetime.datetime.now()
+    
+    # Full refresh weekly on Sundays
+    if current_time.weekday() == 6:
+        context.log.info("Triggering weekly full refresh (Sunday)")
+        return True
+    
+    # Full refresh if data quality issues detected
+    if detect_data_quality_issues(context):
+        context.log.warning("Data quality issues detected, triggering full refresh")
+        return True
+        
+    # Full refresh if it's been more than 7 days since last full refresh
+    if days_since_last_full_refresh() > 7:
+        context.log.info("More than 7 days since last full refresh")
+        return True
+        
+    return False
+
+def detect_data_quality_issues(context) -> bool:
+    """
+    Check for data quality issues that require full refresh
+    """
+    try:
+        import mysql.connector
+        
+        connection = mysql.connector.connect(
+            host='127.0.0.1',
+            database='retail_analytics',
+            user='root',
+            password='Alex@12345'
+        )
+        
+        cursor = connection.cursor()
+        
+        # Check for data gaps or anomalies
+        cursor.execute("""
+            SELECT COUNT(*) as recent_records
+            FROM stream_sales_events 
+            WHERE event_time >= NOW() - INTERVAL 10 MINUTE
+        """)
+        
+        recent_count = cursor.fetchone()[0]
+        
+        # If no recent data, might indicate issues
+        if recent_count == 0:
+            context.log.warning("No recent streaming data found")
+            return True
+            
+        return False
+        
+    except Exception as e:
+        context.log.error(f"Error checking data quality: {e}")
+        return True
+    finally:
+        if 'connection' in locals() and connection.is_connected():
+            cursor.close()
+            connection.close()
+
+def days_since_last_full_refresh() -> int:
+    """
+    Calculate days since last full refresh
+    """
+    # This would check a metadata table or log
+    # For now, return 0 to avoid triggering
+    return 0
+
 @asset(group_name="streaming_transformations")
 def run_streaming_dbt(context) -> dict:
     """
-    Run dbt streaming models as a single asset to avoid duplicates
+    Run dbt streaming models with smart incremental/full refresh logic
     """
-    import subprocess
-    import os
-    
     try:
+        import subprocess
+        import os
+        
+        # Determine refresh strategy
+        needs_full_refresh = should_full_refresh(context)
+        
         # Set environment variables for dbt
         env = os.environ.copy()
         env.update({
@@ -34,29 +109,52 @@ def run_streaming_dbt(context) -> dict:
             "DB_NAME": "retail_analytics"
         })
         
-        # Run dbt streaming models
-        result = subprocess.run([
-            "dbt", "run", "--select", "streaming", 
-            "--project-dir", str(DBT_PROJECT_PATH),
-            "--profiles-dir", str(DBT_PROJECT_PATH)
-        ], 
-        capture_output=True, 
-        text=True, 
-        env=env,
-        cwd=str(DBT_PROJECT_PATH)
+        # Build dbt command
+        if needs_full_refresh:
+            context.log.info("Running FULL REFRESH for streaming models")
+            dbt_command = [
+                "dbt", "run", "--select", "streaming", "--full-refresh",
+                "--project-dir", str(DBT_PROJECT_PATH),
+                "--profiles-dir", str(DBT_PROJECT_PATH)
+            ]
+        else:
+            context.log.info("Running INCREMENTAL refresh for streaming models")
+            dbt_command = [
+                "dbt", "run", "--select", "streaming",
+                "--project-dir", str(DBT_PROJECT_PATH),
+                "--profiles-dir", str(DBT_PROJECT_PATH)
+            ]
+        
+        # Execute with timing
+        start_time = time.time()
+        result = subprocess.run(
+            dbt_command,
+            capture_output=True, 
+            text=True, 
+            env=env,
+            cwd=str(DBT_PROJECT_PATH)
         )
+        processing_time = time.time() - start_time
         
         if result.returncode == 0:
-            context.log.info("dbt streaming models ran successfully")
+            context.log.info(f"dbt streaming models completed in {processing_time:.2f}s")
+            
+            # Parse dbt output for model counts
+            models_processed = result.stdout.count("OK created") + result.stdout.count("OK inserted")
+            
             return {
                 "status": "success",
-                "stdout": result.stdout,
-                "models_built": 3  # rt_sales_summary, rt_inventory_alerts, rt_customer_analytics
+                "refresh_type": "full" if needs_full_refresh else "incremental",
+                "processing_time_seconds": round(processing_time, 2),
+                "models_processed": models_processed,
+                "stdout": result.stdout[:1000]  # Truncate for display
             }
         else:
             context.log.error(f"dbt failed: {result.stderr}")
             return {
                 "status": "failed",
+                "refresh_type": "full" if needs_full_refresh else "incremental",
+                "processing_time_seconds": round(processing_time, 2),
                 "stderr": result.stderr
             }
             
@@ -182,6 +280,76 @@ def streaming_data_validation(context) -> dict:
             connection.close()
     
     return {"status": "error", "message": "Failed to validate streaming data"}
+
+
+@asset(group_name="streaming_monitoring", deps=[run_streaming_dbt])
+def streaming_performance_monitor(context, run_streaming_dbt) -> dict:
+    """
+    Monitor incremental streaming pipeline performance and data quality
+    """
+    try:
+        import mysql.connector
+        
+        connection = mysql.connector.connect(
+            host='127.0.0.1',
+            database='retail_analytics',
+            user='root',
+            password='Alex@12345'
+        )
+        
+        cursor = connection.cursor()
+        
+        # Get performance metrics
+        metrics = {
+            "dbt_processing_time": run_streaming_dbt.get("processing_time_seconds", 0),
+            "dbt_refresh_type": run_streaming_dbt.get("refresh_type", "unknown"),
+            "dbt_status": run_streaming_dbt.get("status", "unknown")
+        }
+        
+        # Check data freshness
+        cursor.execute("""
+            SELECT 
+                COUNT(*) as total_records,
+                MAX(last_updated) as latest_update,
+                TIMESTAMPDIFF(MINUTE, MAX(last_updated), NOW()) as minutes_since_update
+            FROM rt_sales_summary
+        """)
+        
+        freshness_data = cursor.fetchone()
+        if freshness_data:
+            metrics.update({
+                "rt_sales_summary_records": freshness_data[0],
+                "latest_update": str(freshness_data[1]),
+                "data_freshness_minutes": freshness_data[2] or 0
+            })
+        
+        # Check incremental performance thresholds
+        performance_alerts = []
+        
+        if metrics["dbt_processing_time"] > 5.0:
+            performance_alerts.append(f"High processing time: {metrics['dbt_processing_time']}s")
+            
+        if metrics["data_freshness_minutes"] > 10:
+            performance_alerts.append(f"Stale data: {metrics['data_freshness_minutes']} minutes old")
+        
+        metrics["performance_alerts"] = performance_alerts
+        metrics["performance_score"] = "good" if not performance_alerts else "warning"
+        
+        # Log alerts
+        if performance_alerts:
+            context.log.warning(f"Performance alerts: {performance_alerts}")
+        else:
+            context.log.info("All performance metrics within normal ranges")
+        
+        return metrics
+        
+    except Exception as e:
+        context.log.error(f"Error monitoring performance: {e}")
+        return {"status": "error", "message": str(e)}
+    finally:
+        if 'connection' in locals() and connection.is_connected():
+            cursor.close()
+            connection.close()
 
 
 @asset(group_name="streaming_analytics", deps=[streaming_data_validation, run_streaming_dbt])

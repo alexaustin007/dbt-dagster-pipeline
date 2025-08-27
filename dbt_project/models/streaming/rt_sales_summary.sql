@@ -1,7 +1,12 @@
 -- Real-time sales summary for streaming data
 -- Updates every dbt run with latest streaming data
 
-{{ config(materialized='table') }}
+{{ config(
+    materialized='incremental',
+    unique_key=['store_id', 'dept_id', 'sale_date', 'sale_hour'],
+    incremental_strategy='merge',
+    on_schema_change='fail'
+) }}
 
 SELECT 
     store_id,
@@ -18,7 +23,13 @@ SELECT
     MAX(event_time) as latest_transaction_time,
     CURRENT_TIMESTAMP as last_updated
 FROM {{ source('retail_analytics', 'stream_sales_events') }}
-WHERE event_time >= CURRENT_TIMESTAMP - INTERVAL 24 HOUR
+{% if is_incremental() %}
+  -- Only process new events since last run
+  WHERE event_time > (SELECT COALESCE(MAX(latest_transaction_time), '1900-01-01') FROM {{ this }})
+{% else %}
+  -- Full refresh: process last 24 hours
+  WHERE event_time >= CURRENT_TIMESTAMP - INTERVAL 24 HOUR
+{% endif %}
 GROUP BY 
     store_id, 
     dept_id, 

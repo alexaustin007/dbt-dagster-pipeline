@@ -16,6 +16,7 @@ from dagster_project.assets.streaming_pipeline import (
     streaming_data_validation,
     streaming_analytics_summary,
     run_streaming_dbt,
+    streaming_performance_monitor,
     streaming_pipeline_job
 )
 from dagster_project.resources.database import mysql_resource
@@ -54,6 +55,7 @@ defs = Definitions(
         streaming_data_validation,
         streaming_analytics_summary,
         run_streaming_dbt,
+        streaming_performance_monitor,
     ],
     jobs=[
         retail_pipeline,
