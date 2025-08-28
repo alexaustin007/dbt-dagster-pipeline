@@ -10,3 +10,9 @@ models:
       materialized: view
     marts:
       materialized: table
+    streaming:
+      materialized: incremental
+      incremental_strategy: merge
+      on_schema_change: fail
+      pre-hook: "{{ log('Starting incremental streaming model: ' ~ this, info=true) }}"
+      post-hook: "{{ log('Completed streaming model: ' ~ this ~ ' (' ~ this.rows ~ ' rows)', info=true) }}"

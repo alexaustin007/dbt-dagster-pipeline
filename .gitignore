@@ -83,4 +83,7 @@ metastore_db/
 derby.log
 
 # Kafka
-kafka-logs/ 
+kafka-logs/
+
+# Ignore files with credentials
+dagster_project/assets/streaming_pipeline.py 
