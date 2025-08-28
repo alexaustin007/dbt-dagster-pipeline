@@ -1,7 +1,23 @@
 -- Real-time inventory alerts based on sales velocity
 -- Identifies products with high sales rates that may need restocking
 
-{{ config(materialized='table') }}
+{{ config(
+    materialized='incremental',
+    unique_key=['store_id', 'product_id'],
+    incremental_strategy='delete+insert',
+    on_schema_change='fail'
+) }}
+
+{% set incremental_filter %}
+{% if is_incremental() %}
+  -- Only analyze products with recent sales activity
+  AND product_id IN (
+    SELECT DISTINCT product_id 
+    FROM {{ source('retail_analytics', 'stream_sales_events') }}
+    WHERE event_time >= CURRENT_TIMESTAMP - INTERVAL 1 HOUR
+  )
+{% endif %}
+{% endset %}
 
 WITH product_velocity AS (
     SELECT 
@@ -16,6 +32,7 @@ WITH product_velocity AS (
     FROM {{ source('retail_analytics', 'stream_sales_events') }}
     WHERE event_time >= CURRENT_TIMESTAMP - INTERVAL 1 HOUR
     AND transaction_type = 'SALE'
+    {{ incremental_filter }}
     GROUP BY store_id, dept_id, product_id
 ),
 

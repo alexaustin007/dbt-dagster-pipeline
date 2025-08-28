@@ -1,7 +1,12 @@
 -- Real-time customer behavior analytics
 -- Tracks customer purchase patterns and value metrics
 
-{{ config(materialized='table') }}
+{{ config(
+    materialized='incremental',
+    unique_key=['customer_id', 'store_id'],
+    incremental_strategy='merge',
+    merge_exclude_columns=['analysis_timestamp']
+) }}
 
 WITH customer_metrics AS (
     SELECT 
@@ -20,6 +25,15 @@ WITH customer_metrics AS (
     FROM {{ source('retail_analytics', 'stream_sales_events') }}
     WHERE DATE(event_time) = CURRENT_DATE
     AND transaction_type = 'SALE'
+{% if is_incremental() %}
+  -- Only process customers with new transactions
+  AND customer_id IN (
+    SELECT DISTINCT customer_id
+    FROM {{ source('retail_analytics', 'stream_sales_events') }}
+    WHERE processed_at > (SELECT COALESCE(MAX(analysis_timestamp), '1900-01-01') FROM {{ this }})
+    AND DATE(event_time) = CURRENT_DATE
+  )
+{% endif %}
     GROUP BY customer_id, store_id
 ),
 
