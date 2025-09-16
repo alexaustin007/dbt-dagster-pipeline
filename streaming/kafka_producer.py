@@ -1,11 +1,13 @@
 
 """Simple Kafka producer that publishes random sales events to the 'sales_events' topic"""
+import os
 import json, random, time
 from datetime import datetime
+import pytz
 from kafka import KafkaProducer
 
 producer = KafkaProducer(
-    bootstrap_servers="localhost:9092",
+    bootstrap_servers=os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"),
     value_serializer=lambda v: json.dumps(v).encode("utf-8")
 )
 
@@ -24,7 +26,7 @@ while True:
     
     event = {
         "event_id": str(uuid.uuid4()),
-        "event_time": datetime.utcnow().isoformat(),
+        "event_time": datetime.now(pytz.timezone('America/New_York')).isoformat(),
         "store_id": random.choice(stores),
         "dept_id": random.choice(depts),
         "product_id": random.choice(products),
@@ -36,6 +38,6 @@ while True:
         "payment_method": random.choice(payment_methods),
         "promotion_applied": random.choice([True, False])
     }
-    producer.send("sales_events", event)
+    producer.send(os.getenv("KAFKA_TOPIC", "sales_events"), event)
     print("Sent", event)
     time.sleep(1)
