@@ -1,6 +1,7 @@
 """
 Enhanced Kafka producer that generates realistic sales events using actual store/department data
 """
+import os
 import json
 import random
 import time
@@ -13,7 +14,7 @@ from typing import Dict, List
 class StoreAwareProducer:
     def __init__(self):
         self.producer = KafkaProducer(
-            bootstrap_servers="localhost:9092",
+            bootstrap_servers=os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"),
             value_serializer=lambda v: json.dumps(v).encode("utf-8")
         )
         
@@ -130,7 +131,7 @@ class StoreAwareProducer:
                 event = self.generate_sales_event()
                 
                 if event:  # Only send if event was generated (based on probability)
-                    self.producer.send("sales_events", event)
+                    self.producer.send(os.getenv("KAFKA_TOPIC", "sales_events"), event)
                     print(f"Sent: Store {event['store_id']}, Dept {event['dept_id']}, ${event['total_amount']}")
                 else:
                     print("No transaction (outside business hours or low probability)")
