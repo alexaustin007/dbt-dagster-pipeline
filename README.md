@@ -109,14 +109,6 @@ spark-submit streaming/spark_stream_job.py
 - **Streaming Support**: Real-time event processing with Kafka + Spark
 - **Modern Stack**: Asset-based orchestration with comprehensive monitoring
 
-## Development
-
-See `CLAUDE.md` for detailed development instructions, including:
-- Environment setup
-- Pipeline execution workflows
-- Data lineage mapping
-- Troubleshooting guides
-
 ## Configuration
 
 - `.env` - Database credentials
