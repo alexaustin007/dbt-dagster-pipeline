@@ -8,8 +8,8 @@ A complete end-to-end ETL system demonstrating modern data stack practices with 
 - **Orchestration**: Dagster (asset-based pipeline management)
 - **Transformations**: dbt-mysql (staging → marts)
 - **Batch Processing**: Python + pandas
-- **Streaming**: Kafka + Spark Structured Streaming (optional demo)
-- **Analysis**: Jupyter notebooks + BI tools
+- **Streaming**: Kafka + Spark Structured Streaming
+
 
 ## Architecture
 
