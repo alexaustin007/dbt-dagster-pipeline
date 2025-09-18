@@ -1,141 +1,118 @@
 
 # Retail Data Pipeline
 
-A complete end-to-end ETL system demonstrating modern data stack practices with local batch and streaming processing.
+A simple data pipeline that processes retail sales data using Python, MySQL, dbt, and Dagster.
 
-## Tech Stack
-- **Storage**: MySQL 8 (local database)
-- **Orchestration**: Dagster (asset-based pipeline management)
-- **Transformations**: dbt-mysql (staging → marts)
-- **Batch Processing**: Python + pandas
-- **Streaming**: Kafka + Spark Structured Streaming (optional demo)
-- **Analysis**: Jupyter notebooks + BI tools
+## What This Does
 
-## Architecture
+This project takes CSV files with sales data and transforms them into clean, analyzed data ready for business insights. It handles both batch processing (files) and real-time streaming data.
 
-```
-data/raw/*.csv → Dagster Assets → MySQL raw_* tables → 
-dbt staging views → dbt intermediate views → dbt mart tables → Analytics
-```
+## Quick Setup
 
-### Data Flow
-1. **Raw Data**: CSV files in `data/raw/` (sales.csv, stores.csv, features.csv)
-2. **Ingestion**: Dagster assets load CSVs → MySQL (`raw_sales`, `raw_stores`, `raw_features`)
-3. **Staging**: dbt creates clean views (`stg_*`) from raw tables
-4. **Transformations**: dbt intermediate models (`int_*`) perform joins and business logic
-5. **Marts**: dbt final analytics tables (`fct_sales_summary`, `fct_streaming_sales`)
+### 1. Prerequisites
+- Python 3.9 or higher
+- MySQL 8.0 running locally
+- Java 8+ (only needed for streaming features)
 
-## Quick Start
-
-### Prerequisites
-- Python 3.9+
-- MySQL 8.0+ running locally
-- Java 8+ (for Spark streaming demo only)
-
-### Setup
+### 2. Installation
 ```bash
-# Clone and setup environment
-cd retail_data_pipeline_full
-source venv/bin/activate  # Virtual environment already created
+# Navigate to project folder
+cd /Users/alexaustinchettiar/Downloads/retail_data_pipeline_full
+
+# Activate virtual environment
+source venv/bin/activate
+
+# Install dependencies
 pip install -r requirements.txt
 
-# Ensure MySQL is running and database exists
+# Create database
 mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS retail_analytics;"
 ```
 
-### Run the Pipeline
+### 3. Run the Pipeline
 
-#### Option 1: Complete Dagster-Orchestrated Pipeline (Recommended)
+**Option A: Using Dagster (Recommended)**
 ```bash
-# 1. Start Dagster development server
+# Start Dagster web interface
 dagster dev -f dagster_project/repository.py
 
-# 2. Open Dagster UI (http://localhost:3000)
-# 3. Materialize data ingestion assets:
-#    - raw_sales_data
-#    - raw_stores_data  
-#    - raw_features_data
+# Open http://localhost:3000 in your browser
+# Click "Materialize All" for the data loading assets
+# Then run dbt transformations
+cd dbt_project
+dbt run
+```
 
-# 4. Run dbt transformations
+**Option B: Manual Steps**
+```bash
+# Load data from CSV files
+python ingestion/from_file.py --db_user root --db_password YOUR_PASSWORD --db_name retail_analytics
+
+# Transform data
 cd dbt_project
 dbt run
 
-# 5. Query final results
+# Check results
 mysql -u root -p retail_analytics -e "SELECT * FROM fct_sales_summary LIMIT 10;"
 ```
 
-#### Option 2: Manual Step-by-Step
-```bash
-# 1. Manual ingestion (bypasses Dagster)
-python ingestion/from_file.py --db_user root --db_password <password> --db_name retail_analytics
+## What's Inside
 
-# 2. Run dbt transformations
-cd dbt_project
-dbt run
-
-# 3. Start Dagster for monitoring (optional)
-dagster dev -f dagster_project/repository.py
+```
+├── data/raw/              # Put your CSV files here
+├── ingestion/             # Scripts to load data into MySQL
+├── dbt_project/           # Data transformations
+├── dagster_project/       # Pipeline orchestration
+├── streaming/             # Real-time data processing (optional)
+└── notebooks/             # Data analysis
 ```
 
-### Streaming Demo (Optional)
+## Data Flow
+
+1. **Raw Data**: Place CSV files in `data/raw/`
+2. **Load**: Scripts move CSV data into MySQL raw tables
+3. **Transform**: dbt cleans and joins the data
+4. **Analyze**: Final tables ready for reporting
+
+## Key Commands
+
+```bash
+# Start the pipeline orchestrator
+dagster dev -f dagster_project/repository.py
+
+# Run data transformations
+cd dbt_project && dbt run
+
+# Test data quality
+cd dbt_project && dbt test
+
+# Load new data files
+python ingestion/from_file.py --db_user root --db_password YOUR_PASSWORD
+```
+
+## Streaming Demo (Optional)
+
+If you want to try real-time data processing:
+
 ```bash
 # Terminal 1: Start Kafka
-brew services start kafka  # macOS
-# or docker-compose up kafka  # Docker
+brew services start kafka
 
-# Terminal 2: Generate streaming events
+# Terminal 2: Generate fake sales events
 python streaming/kafka_producer.py
 
 # Terminal 3: Process streaming data
 spark-submit streaming/spark_stream_job.py
 ```
 
-## Project Structure
-
-```
-├── data/raw/                   # Source CSV files
-├── dagster_project/            # Orchestration
-│   ├── assets/data_loading.py  # CSV ingestion assets
-│   └── jobs/                   # Pipeline definitions
-├── dbt_project/                # Transformations
-│   ├── models/staging/         # Clean raw data (views)
-│   ├── models/intermediate/    # Business logic (views)
-│   └── models/marts/           # Final analytics (tables)
-├── ingestion/                  # Data loading utilities
-├── streaming/                  # Kafka + Spark demo
-└── CLAUDE.md                   # Detailed development guide
-```
-
-## Database Schema
-
-### Raw Tables (MySQL)
-- `raw_sales` - Weekly sales by store/department
-- `raw_stores` - Store metadata (type, size)
-- `raw_features` - Economic indicators and promotions
-
-### dbt Models
-- **Staging**: `stg_sales`, `stg_stores`, `stg_features` (views)
-- **Intermediate**: `int_daily_sales`, `int_store_performance` (views)
-- **Marts**: `fct_sales_summary`, `fct_streaming_sales` (tables)
-
-## Key Features
-
-- **Incremental Loading**: Composite primary keys with upsert strategy
-- **Data Lineage**: Full dependency tracking via Dagster + dbt
-- **Modular Design**: Separate ingestion, transformation, and analysis layers
-- **Streaming Support**: Real-time event processing with Kafka + Spark
-- **Modern Stack**: Asset-based orchestration with comprehensive monitoring
-
-## Development
-
-See `CLAUDE.md` for detailed development instructions, including:
-- Environment setup
-- Pipeline execution workflows
-- Data lineage mapping
-- Troubleshooting guides
-
 ## Configuration
 
-- `.env` - Database credentials
-- `dbt_project/profiles.yml` - dbt connection settings
-- `dagster_project/dagster.yaml` - Orchestration configuration
+- Database settings: `.env` file
+- dbt connection: `dbt_project/profiles.yml`
+- Pipeline settings: `dagster_project/dagster.yaml`
+
+## Getting Help
+
+- Check the Dagster UI at http://localhost:3000 for pipeline status
+- Look at `CLAUDE.md` for detailed technical documentation
+- All commands should be run from the project root directory with the virtual environment activated
