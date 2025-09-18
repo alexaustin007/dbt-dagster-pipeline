@@ -88,23 +88,6 @@ python streaming/kafka_producer.py
 
 # Terminal 3: Process streaming data
 spark-submit streaming/spark_stream_job.py
-```
-
-## Project Structure
-
-```
-├── data/raw/                   # Source CSV files
-├── dagster_project/            # Orchestration
-│   ├── assets/data_loading.py  # CSV ingestion assets
-│   └── jobs/                   # Pipeline definitions
-├── dbt_project/                # Transformations
-│   ├── models/staging/         # Clean raw data (views)
-│   ├── models/intermediate/    # Business logic (views)
-│   └── models/marts/           # Final analytics (tables)
-├── ingestion/                  # Data loading utilities
-├── streaming/                  # Kafka + Spark demo
-└── CLAUDE.md                   # Detailed development guide
-```
 
 ## Database Schema
 
