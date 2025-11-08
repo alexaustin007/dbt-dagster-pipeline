@@ -1,0 +1,177 @@
+version: '3.8'
+
+services:
+  # ============================================
+  # MySQL Database Service (Docker - Port 3307)
+  # ============================================
+  mysql:
+    image: mysql:8.0
+    container_name: retail_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: Alex@12345
+      MYSQL_DATABASE: retail_analytics
+      MYSQL_CHARACTER_SET_SERVER: utf8mb4
+      MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
+    ports:
+      - "3307:3306"  # Host:Container - Docker MySQL on 3307, Local MySQL on 3306
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pAlex@12345"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - retail_network
+    restart: unless-stopped
+
+  # ============================================
+  # Zookeeper Service (for Kafka)
+  # ============================================
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: retail_zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - retail_network
+    restart: unless-stopped
+
+  # ============================================
+  # Kafka Service
+  # ============================================
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: retail_kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    networks:
+      - retail_network
+    restart: unless-stopped
+
+  # ============================================
+  # Python Application Service
+  # ============================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: retail_app
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    environment:
+      # Database Configuration (inside Docker network, containers use port 3306)
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: Alex@12345
+      DB_NAME: retail_analytics
+      # Kafka Configuration
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_TOPIC: sales_events
+      # Python Configuration
+      PYTHONUNBUFFERED: 1
+    volumes:
+      # Mount data directory for CSV files
+      - ./data:/app/data
+      # Mount logs directory
+      - ./logs:/app/logs
+      # Mount dbt project for live updates during development
+      - ./dbt_project:/app/dbt_project
+      # Mount dagster project for live updates during development
+      - ./dagster_project:/app/dagster_project
+      # Mount streaming scripts
+      - ./streaming:/app/streaming
+      # Mount ingestion scripts
+      - ./ingestion:/app/ingestion
+    networks:
+      - retail_network
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+  # ============================================
+  # Dagster Web UI Service
+  # ============================================
+  dagster:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: retail_dagster
+    depends_on:
+      mysql:
+        condition: service_healthy
+      app:
+        condition: service_started
+    environment:
+      # Database Configuration
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: Alex@12345
+      DB_NAME: retail_analytics
+      # Kafka Configuration
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_TOPIC: sales_events
+      # Dagster Configuration
+      DAGSTER_HOME: /app/.dagster_home
+      # Python Configuration
+      PYTHONUNBUFFERED: 1
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount data directory for CSV files
+      - ./data:/app/data
+      # Mount logs directory
+      - ./logs:/app/logs
+      # Mount dbt project
+      - ./dbt_project:/app/dbt_project
+      # Mount dagster project
+      - ./dagster_project:/app/dagster_project
+      # Mount streaming scripts
+      - ./streaming:/app/streaming
+      # Persist Dagster storage
+      - dagster_storage:/app/.dagster_home
+    command: dagster dev -f dagster_project/repository.py -h 0.0.0.0 -p 3000
+    networks:
+      - retail_network
+    restart: unless-stopped
+
+# ============================================
+# Named Volumes for Data Persistence
+# ============================================
+volumes:
+  mysql_data:
+    driver: local
+  dagster_storage:
+    driver: local
+
+# ============================================
+# Network Configuration
+# ============================================
+networks:
+  retail_network:
+    driver: bridge
