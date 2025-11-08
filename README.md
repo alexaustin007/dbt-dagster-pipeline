@@ -3,7 +3,12 @@
 
 A simple data pipeline that processes retail sales data using Python, MySQL, dbt, and Dagster.
 
-## What This Does
+## Tech Stack
+- **Storage**: MySQL 8 (local database)
+- **Orchestration**: Dagster (asset-based pipeline management)
+- **Transformations**: dbt-mysql (staging → marts)
+- **Batch Processing**: Python + pandas
+- **Streaming**: Kafka + Spark Structured Streaming
 
 This project takes CSV files with sales data and transforms them into clean, analyzed data ready for business insights. It handles both batch processing (files) and real-time streaming data.
 
@@ -104,6 +109,26 @@ python streaming/kafka_producer.py
 # Terminal 3: Process streaming data
 spark-submit streaming/spark_stream_job.py
 ```
+
+## Database Schema
+
+### Raw Tables (MySQL)
+- `raw_sales` - Weekly sales by store/department
+- `raw_stores` - Store metadata (type, size)
+- `raw_features` - Economic indicators and promotions
+
+### dbt Models
+- **Staging**: `stg_sales`, `stg_stores`, `stg_features` (views)
+- **Intermediate**: `int_daily_sales`, `int_store_performance` (views)
+- **Marts**: `fct_sales_summary`, `fct_streaming_sales` (tables)
+
+## Key Features
+
+- **Incremental Loading**: Composite primary keys with upsert strategy
+- **Data Lineage**: Full dependency tracking via Dagster + dbt
+- **Modular Design**: Separate ingestion, transformation, and analysis layers
+- **Streaming Support**: Real-time event processing with Kafka + Spark
+- **Modern Stack**: Asset-based orchestration with comprehensive monitoring
 
 ## Configuration
 

@@ -3,6 +3,7 @@
 
 Replace API_ENDPOINT with a real endpoint when available.
 """
+import os
 import argparse, requests, pandas as pd
 from sqlalchemy import create_engine
 
@@ -16,10 +17,10 @@ def fetch_api() -> pd.DataFrame:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--db_user", default="root")
-    parser.add_argument("--db_password", default="password")
-    parser.add_argument("--db_name", default="retail")
-    parser.add_argument("--db_host", default="127.0.0.1")
+    parser.add_argument("--db_user", default=os.getenv("DB_USER", "root"))
+    parser.add_argument("--db_password", default=os.getenv("DB_PASSWORD", "password"))
+    parser.add_argument("--db_name", default=os.getenv("DB_NAME", "retail"))
+    parser.add_argument("--db_host", default=os.getenv("DB_HOST", "127.0.0.1"))
     args = parser.parse_args()
 
     df = fetch_api()

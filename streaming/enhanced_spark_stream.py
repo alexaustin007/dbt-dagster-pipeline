@@ -2,6 +2,7 @@
 Enhanced Spark Structured Streaming Job for realistic retail events
 Supports the new enhanced event schema with proper data types and validation
 """
+import os
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, from_json, current_timestamp, when
 from pyspark.sql.types import (
@@ -33,8 +34,8 @@ enhanced_schema = StructType([
 # Read from Kafka
 kafka_df = spark.readStream \
     .format("kafka") \
-    .option("kafka.bootstrap.servers", "localhost:9092") \
-    .option("subscribe", "sales_events") \
+    .option("kafka.bootstrap.servers", os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")) \
+    .option("subscribe", os.getenv("KAFKA_TOPIC", "sales_events")) \
     .option("startingOffsets", "latest") \
     .load()
 
@@ -62,10 +63,10 @@ final_df = transformed_df.select(
 
 # Database connection properties
 db_properties = {
-    "url": "jdbc:mysql://127.0.0.1:3306/retail_analytics",
+    "url": f"jdbc:mysql://{os.getenv('DB_HOST', '127.0.0.1')}:3306/{os.getenv('DB_NAME', 'retail_analytics')}",
     "driver": "com.mysql.cj.jdbc.Driver",
-    "user": "root",
-    "password": "Alex@12345"  # Using actual password from .env
+    "user": os.getenv("DB_USER", "root"),
+    "password": os.getenv("DB_PASSWORD", "")
 }
 
 # Write stream to MySQL
