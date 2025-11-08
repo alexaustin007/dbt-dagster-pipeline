@@ -10,7 +10,7 @@ A simple data pipeline that processes retail sales data using Python, MySQL, dbt
 - **Batch Processing**: Python + pandas
 - **Streaming**: Kafka + Spark Structured Streaming
 
-This project takes CSV files with sales data and transforms them into clean, analyzed data ready for business insights. It handles both batch processing (files) and real-time streaming data.
+This project takes CSV files with sales data and transforms them into clean, analyzed data ready for business insights. It handles both batch processing (files) and real-time streaming data
 
 ## Quick Setup
 
@@ -141,3 +141,4 @@ spark-submit streaming/spark_stream_job.py
 - Check the Dagster UI at http://localhost:3000 for pipeline status
 - Look at `CLAUDE.md` for detailed technical documentation
 - All commands should be run from the project root directory with the virtual environment activated
+
